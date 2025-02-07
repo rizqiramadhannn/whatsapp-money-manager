@@ -1,0 +1,8 @@
+node_modules/
+.wwebjs_auth/
+.wwebjs_cache/
+session/
+credentials.json
+secret.js
+whatsapp_notes.bat
+whatsapp_notes.bat - Shortcut.lnk
