@@ -1,6 +1,8 @@
-const { Client, LocalAuth, Chat } = require("whatsapp-web.js");
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const { google } = require("googleapis");
+const TransactionItem = require("./model/transactionItem");
+const CategoryItem = require("./model/categoryItem");
 const sheets = google.sheets("v4");
 const fs = require("fs");
 const { formatDateTime, capitalizeFirstLetter } = require("./helper/helper");
@@ -26,8 +28,8 @@ client.on("ready", () => {
   console.log("Client is ready!");
 });
 
-async function appendToSheet(data, msg, type) {
-  const inputRange = type === "out" ? "Cashflow!B:F" : "Cashflow!H:L";
+async function addTransaction(data) {
+  const inputRange = data.type === "out" ? "Cashflow!B:F" : "Cashflow!H:L";
 
   const client = await auth.getClient();
   const request = {
@@ -35,34 +37,34 @@ async function appendToSheet(data, msg, type) {
     range: inputRange,
     valueInputOption: "RAW",
     resource: {
-      values: [data],
+      values: [data.toArray()],
     },
     auth: client,
   };
 
   try {
-    await sheets.spreadsheets.values.append(request);
-    msg.reply(
-      `Successfully wrote to sheet\n${data[1]} ${data[2]} ${data[3]} ${data[4]}`
-    );
-    console.log("Data appended to sheet:", data);
+    const response = await sheets.spreadsheets.values.append(request);
+    if (response.status === 200) {
+      console.log("Data successfully appended to the sheet:", response.data);
+      return true;
+    } else {
+      console.log("Failed to append data to sheet. Status:", response.status);
+      return false;
+    }
   } catch (error) {
-    msg.reply("Failed to write to sheet:", error);
     console.error("Error appending data to sheet:", error);
+    return false;
   }
 }
 
-async function addSomething(data, msg, type) {
+async function editConfig(data) {
   let column;
-  if (type === "Category") {
+  if (data.type === "Category") {
     const baseCategory = await getConfig("category");
-    column = `Config!C${baseCategory.length + 3}`;
-  } else if (type === "Source") {
-    const baseSource = await getConfig("source");
-    column = `Config!B${baseSource.length + 3}`;
+    column = `Config!C${baseCategory.length + 2}`;
   } else {
-    msg.reply('Invalid type, please use "Category" or "Source"');
-    return;
+    const baseSource = await getConfig("source");
+    column = `Config!B${baseSource.length + 2}`;
   }
 
   const client = await auth.getClient();
@@ -71,18 +73,23 @@ async function addSomething(data, msg, type) {
     range: column,
     valueInputOption: "RAW",
     resource: {
-      values: [data],
+      values: [data.toArray()],
     },
     auth: client,
   };
 
   try {
-    await sheets.spreadsheets.values.append(request);
-    msg.reply(`Successfully added ${type}: ${data[0]}`);
-    console.log("Data appended to sheet:", data);
+    const response = await sheets.spreadsheets.values.append(request);
+    if (response.status === 200) {
+      console.log("Data successfully appended to the sheet:", response.data);
+      return true;
+    } else {
+      console.log("Failed to append data to sheet. Status:", response.status);
+      return false;
+    }
   } catch (error) {
-    msg.reply("Failed to write to sheet:", error);
     console.error("Error appending data to sheet:", error);
+    return false;
   }
 }
 
@@ -110,28 +117,85 @@ async function register(data, msg, name) {
   }
 }
 
-client.on("message", async (msg) => {
-  const phoneNumber = "+" + msg.from.replace(/@.*$/, "");
+async function sendMessage(transactions, categories, errors, msg) {
+  let countTrxSuccess = 0;
+  let countTrxFailed = 0;
+  let countConfigSuccess = 0;
+  let countConfigFailed = 0;
+  let message = "";
+  for (const transaction of transactions) {
+    if (addTransaction(transaction, msg)) {
+      countTrxSuccess++;
+    } else {
+      countTrxFailed++;
+    }
+  }
+
+  for (const category of categories) {
+    if (editConfig(category, msg)) {
+      countConfigSuccess++
+    } else {
+      countConfigFailed++;
+    }
+  }
+
+  if (countTrxSuccess > 0) {
+    message += `${countTrxSuccess} transaction successfully added\n\n`
+  }
+
+  if (countTrxFailed > 0) {
+    message += `${countTrxFailed} transaction fail to added\n\n`
+  }
+
+  if (countConfigSuccess > 0) {
+    message += `${countConfigSuccess} config successfully added\n\n`
+  }
+
+  if (countConfigFailed > 0) {
+    message += `${countConfigFailed} config fail to added\n\n`
+  }
+
+  if (errors.length > 0) {
+    message += `${errors.length} message error:\n`;
+    for (const error of errors) {
+      message += `${error}`;
+    }
+    message += `\nPlease make sure to use the correct format`
+  }
+
+  msg.reply(message);
+}
+
+async function checkMessage(messages) {
+  // const phoneNumber = msg.from.replace(/@.*$/, "");
   const regexRegister = /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(.+?)$/;
   const regexOutcome =
     /^([a-zA-Z\s]+)\s+(.+?)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(\d+)$/;
   const regexAction =
-    /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)$/;
+    /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(.+?)$/;
   const regexSpreadsheetId = /\/d\/([a-zA-Z0-9-_]+)/;
   const baseCategory = await getConfig("category");
   const baseSource = await getConfig("source");
   const baseNumbers = await getConfig("users");
   const baseName = await getConfig("name");
   const baseSheet = await getConfig("sheet");
-  let lines = "";
-  let chat = await msg.getChat();
-  let messages = await chat.fetchMessages({limit: chat.unreadCount, fromMe: false})
+  let lines = [];
+  let times = [];
+  let transactionItem = [];
+  let categoryItem = [];
+  let errorItem = [];
+  let phoneNumber = "";
+  let lastMessage = messages[messages.length - 1];
   for (const message of messages) {
-    lines += message.body.split("\n");
+    phoneNumber = message.from.replace(/@.*$/, "");
+    const messageLines = message.body.split("\n");
+    lines.push(...messageLines);
+    times.push(...Array(messageLines.length).fill(message.timestamp));
   }
 
   if (baseNumbers.includes(phoneNumber)) {
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       if (regexOutcome.test(line)) {
         const baseAction = ["in", "out"];
         const match = line.match(regexOutcome);
@@ -140,65 +204,88 @@ client.on("message", async (msg) => {
         const category = match[3].trim();
         const source = match[4].trim();
         const price = parseInt(match[5], 10);
-        const formattedDateTime = formatDateTime(new Date());
-
-        const capitalizedItem = capitalizeFirstLetter(item).replace(/_/g, ' ');;
+        const formattedDateTime = formatDateTime(times[i]);
+        const capitalizedItem = capitalizeFirstLetter(item).replace(/_/g, ' ');
         const capitalizedCategory = capitalizeFirstLetter(category);
         const capitalizedSource = capitalizeFirstLetter(source);
 
         if (!baseCategory.includes(capitalizedCategory)) {
-          msg.reply(
-            `Invalid category "${capitalizedCategory}". Please choose from: ${baseCategory}.`
+          errorItem.push(
+            `- Invalid category "${capitalizedCategory}" at line "${line}".\n`
           );
         } else if (!baseSource.includes(capitalizedSource)) {
-          msg.reply(
-            `Invalid source "${capitalizedSource}". Please choose from: ${baseSource}.`
+          errorItem.push(
+            `- Invalid source "${capitalizedSource}" at line "${line}".\n`
           );
         } else if (!baseAction.includes(type)) {
-          msg.reply(
-            `Invalid action "${type}". Please choose from: ${baseAction}.`
+          errorItem.push(
+            `- Invalid action "${type}" at line "${line}".\n`
           );
         } else {
-          await appendToSheet(
-            [
-              formattedDateTime,
-              capitalizedItem,
-              capitalizedCategory,
-              capitalizedSource,
-              price,
-            ],
-            msg,
+          const item = new TransactionItem(
+            formattedDateTime,
+            capitalizedItem,
+            capitalizedCategory,
+            capitalizedSource,
+            price,
             type
           );
+          transactionItem.push(item);
         }
       } else if (regexAction.test(line)) {
         const match = line.match(regexAction);
-        const type = match[2].trim();
+        const type = capitalizeFirstLetter(match[2].trim());
         const action = match[3].trim();
-        const category = match[4].trim();
+        const category = capitalizeFirstLetter(match[4].trim());
+        console.log(category);
+        console.log(type);
 
-        await addSomething(
-          [capitalizeFirstLetter(category)],
-          msg,
-          capitalizeFirstLetter(type)
-        );
+        if (type !== "Category" && type !== "Source") {
+          errorItem.push(
+            `- Invalid type "${type}" at line "${line}".\n`
+          );
+        } else {
+          const item = new CategoryItem(
+            category,
+            type
+          );
+          categoryItem.push(item);
+        }
       } else {
-        msg.reply(
-          `Line "${line}" is not in the correct format. Please use: "in/out item_name category price" (e.g., "out mcdonalds food bca 20000").`
+        errorItem.push(
+          `- Invalid format at "${line}".\n`
         );
       }
     }
+
+    sendMessage(transactionItem, categoryItem, errorItem, lastMessage);
+
   } else if (regexRegister.test(lines[0])) {
     const match = lines[0].match(regexRegister);
     const name = match[2].trim();
     const id = match[3].trim();
     const spreadsheet = id.match(regexSpreadsheetId);
-    await register([phoneNumber, name, spreadsheet[1]], msg, name);
+    await register([phoneNumber, name, spreadsheet[1]], lastMessage, name);
   } else {
     msg.reply(
       `Your phone number is not registered. If you want to register please use "register [name] [your spreadsheet link]"\n\nPlease make sure to keep your name in one word and give me your full spreadsheet link after you copied this template:\n\n"https://docs.google.com/spreadsheets/d/1xPZNMn1BJiL8iXDSrT5OpSjxJQJx1vI8Nzs0HRPAH04/"`
     );
   }
+}
+
+client.on('ready', async () => {
+  const users = await getConfig("users");
+  for (const user of users) {
+    let chat = await client.getChatById(`${user}@s.whatsapp.net`);
+    let messages = await chat.fetchMessages({ limit: chat.unreadCount, fromMe: false });
+    checkMessage(messages);
+  }
+})
+
+client.on("message", async (msg) => {
+  let chat = await msg.getChat();
+  let messages = await chat.fetchMessages({ limit: chat.unreadCount, fromMe: false });
+  checkMessage(messages);
 });
 
 async function getConfig(type) {
@@ -247,6 +334,9 @@ async function getConfig(type) {
     });
 
     const combinedCategories = Array.from(categorySet);
+    if (combinedCategories.length > 0) {
+      combinedCategories.shift();
+    }
     console.log(combinedCategories);
     return combinedCategories;
   } catch (error) {
