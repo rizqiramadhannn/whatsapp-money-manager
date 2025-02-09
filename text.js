@@ -28,12 +28,12 @@ client.on("ready", () => {
   console.log("Client is ready!");
 });
 
-async function addTransaction(data) {
+async function addTransaction(data, sheetId) {
   const inputRange = data.type === "out" ? "Cashflow!B:F" : "Cashflow!H:L";
 
   const client = await auth.getClient();
   const request = {
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: sheetId,
     range: inputRange,
     valueInputOption: "RAW",
     resource: {
@@ -57,19 +57,19 @@ async function addTransaction(data) {
   }
 }
 
-async function editConfig(data) {
+async function editConfig(data, sheetId) {
   let column;
   if (data.type === "Category") {
-    const baseCategory = await getConfig("category");
+    const baseCategory = await getConfig("category", sheetId);
     column = `Config!C${baseCategory.length + 2}`;
   } else {
-    const baseSource = await getConfig("source");
+    const baseSource = await getConfig("source", sheetId);
     column = `Config!B${baseSource.length + 2}`;
   }
 
   const client = await auth.getClient();
   const request = {
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId: sheetId,
     range: column,
     valueInputOption: "RAW",
     resource: {
@@ -117,14 +117,15 @@ async function register(data, msg, name) {
   }
 }
 
-async function sendMessage(transactions, categories, errors, msg) {
+async function sendMessage(transactions, categories, errors, msg, sheetId) {
+
   let countTrxSuccess = 0;
   let countTrxFailed = 0;
   let countConfigSuccess = 0;
   let countConfigFailed = 0;
   let message = "";
   for (const transaction of transactions) {
-    if (addTransaction(transaction, msg)) {
+    if (addTransaction(transaction, sheetId)) {
       countTrxSuccess++;
     } else {
       countTrxFailed++;
@@ -132,7 +133,7 @@ async function sendMessage(transactions, categories, errors, msg) {
   }
 
   for (const category of categories) {
-    if (editConfig(category, msg)) {
+    if (editConfig(category, sheetId)) {
       countConfigSuccess++
     } else {
       countConfigFailed++;
@@ -166,19 +167,15 @@ async function sendMessage(transactions, categories, errors, msg) {
   msg.reply(message);
 }
 
-async function checkMessage(messages) {
+async function checkMessage(messages, user = '') {
   // const phoneNumber = msg.from.replace(/@.*$/, "");
   const regexRegister = /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(.+?)$/;
-  const regexOutcome =
-    /^([a-zA-Z\s]+)\s+(.+?)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(\d+)$/;
-  const regexAction =
-    /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(.+?)$/;
+  const regexOutcome = /^([a-zA-Z\s]+)\s+(.+?)\s+(.+?)\s+(.+?)\s+(\d+)$/;
+  const regexAction = /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(.+?)$/;
   const regexSpreadsheetId = /\/d\/([a-zA-Z0-9-_]+)/;
-  const baseCategory = await getConfig("category");
-  const baseSource = await getConfig("source");
-  const baseNumbers = await getConfig("users");
-  const baseName = await getConfig("name");
-  const baseSheet = await getConfig("sheet");
+  const baseName = await getConfig("name", ADMIN_SPREADSHEET_ID);
+  const baseSheet = await getConfig("sheet", ADMIN_SPREADSHEET_ID);
+  const users = await getConfig("users", ADMIN_SPREADSHEET_ID);
   let lines = [];
   let times = [];
   let transactionItem = [];
@@ -192,8 +189,15 @@ async function checkMessage(messages) {
     lines.push(...messageLines);
     times.push(...Array(messageLines.length).fill(message.timestamp));
   }
+  let index = users.indexOf(phoneNumber);
+  if (user != '') {
+    index = users.indexOf(user);
+  }
+  let sheetId = baseSheet[index];
+  const baseCategory = await getConfig("category", sheetId);
+  const baseSource = await getConfig("source", sheetId);
 
-  if (baseNumbers.includes(phoneNumber)) {
+  if (users.includes(phoneNumber)) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (regexOutcome.test(line)) {
@@ -206,8 +210,8 @@ async function checkMessage(messages) {
         const price = parseInt(match[5], 10);
         const formattedDateTime = formatDateTime(times[i]);
         const capitalizedItem = capitalizeFirstLetter(item).replace(/_/g, ' ');
-        const capitalizedCategory = capitalizeFirstLetter(category);
-        const capitalizedSource = capitalizeFirstLetter(source);
+        const capitalizedCategory = capitalizeFirstLetter(category).replace(/_/g, ' ');;
+        const capitalizedSource = capitalizeFirstLetter(source).replace(/_/g, ' ');;
 
         if (!baseCategory.includes(capitalizedCategory)) {
           errorItem.push(
@@ -236,7 +240,7 @@ async function checkMessage(messages) {
         const match = line.match(regexAction);
         const type = capitalizeFirstLetter(match[2].trim());
         const action = match[3].trim();
-        const category = capitalizeFirstLetter(match[4].trim());
+        const category = capitalizeFirstLetter(match[4].trim()).replace(/_/g, ' ');
         console.log(category);
         console.log(type);
 
@@ -258,7 +262,7 @@ async function checkMessage(messages) {
       }
     }
 
-    sendMessage(transactionItem, categoryItem, errorItem, lastMessage);
+    sendMessage(transactionItem, categoryItem, errorItem, lastMessage, sheetId);
 
   } else if (regexRegister.test(lines[0])) {
     const match = lines[0].match(regexRegister);
@@ -267,28 +271,30 @@ async function checkMessage(messages) {
     const spreadsheet = id.match(regexSpreadsheetId);
     await register([phoneNumber, name, spreadsheet[1]], lastMessage, name);
   } else {
-    msg.reply(
-      `Your phone number is not registered. If you want to register please use "register [name] [your spreadsheet link]"\n\nPlease make sure to keep your name in one word and give me your full spreadsheet link after you copied this template:\n\n"https://docs.google.com/spreadsheets/d/1xPZNMn1BJiL8iXDSrT5OpSjxJQJx1vI8Nzs0HRPAH04/"`
-    );
+    // msg.reply(
+    //   `Your phone number is not registered. If you want to register please use "register [name] [your spreadsheet link]"\n\nPlease make sure to keep your name in one word and give me your full spreadsheet link after you copied this template:\n\n"https://docs.google.com/spreadsheets/d/1xPZNMn1BJiL8iXDSrT5OpSjxJQJx1vI8Nzs0HRPAH04/"`
+    // );
   }
 }
 
 client.on('ready', async () => {
-  const users = await getConfig("users");
+  const users = await getConfig("users", ADMIN_SPREADSHEET_ID);
   for (const user of users) {
     let chat = await client.getChatById(`${user}@s.whatsapp.net`);
     let messages = await chat.fetchMessages({ limit: chat.unreadCount, fromMe: false });
-    checkMessage(messages);
+    checkMessage(messages, user);
   }
 })
 
 client.on("message", async (msg) => {
   let chat = await msg.getChat();
-  let messages = await chat.fetchMessages({ limit: chat.unreadCount, fromMe: false });
+  console.log(chat);
+
+  let messages = await chat.fetchMessages({ limit: 1, fromMe: false });
   checkMessage(messages);
 });
 
-async function getConfig(type) {
+async function getConfig(type, sheetId) {
   let baseRange = "";
   switch (type) {
     case "category":
@@ -310,16 +316,10 @@ async function getConfig(type) {
       return "";
   }
   const client = await auth.getClient();
-  let spreadsheetID = "";
-  if (type === "category" || type === "source") {
-    spreadsheetID = SPREADSHEET_ID;
-  } else {
-    spreadsheetID = ADMIN_SPREADSHEET_ID;
-  }
   try {
     const response = await sheets.spreadsheets.values.get({
       auth: client,
-      spreadsheetId: spreadsheetID,
+      spreadsheetId: sheetId,
       range: baseRange,
     });
 
@@ -329,7 +329,11 @@ async function getConfig(type) {
     values.forEach((row) => {
       const category = row[0];
       if (category) {
-        categorySet.add(category);
+        if (type == "category" || type == "source") {
+          categorySet.add(capitalizeFirstLetter(category.toLowerCase()));
+        } else {
+          categorySet.add(category);
+        }
       }
     });
 
