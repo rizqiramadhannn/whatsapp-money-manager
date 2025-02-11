@@ -5,7 +5,7 @@ const TransactionItem = require("./model/transactionItem");
 const CategoryItem = require("./model/categoryItem");
 const sheets = google.sheets("v4");
 const fs = require("fs");
-const { formatDateTime, capitalizeFirstLetter } = require("./helper/helper");
+const { formatDateTime, capitalizeFirstLetter, getGreeting } = require("./helper/helper");
 const secret = require("./secret");
 const CREDENTIALS = JSON.parse(fs.readFileSync("credentials.json"));
 const SPREADSHEET_ID = secret["default-sheet-id"];
@@ -13,6 +13,7 @@ const ADMIN_SPREADSHEET_ID = secret["admin-sheet-id"];
 const client = new Client({
   authStrategy: new LocalAuth(),
 });
+const timer = 5;
 
 const auth = new google.auth.GoogleAuth({
   credentials: CREDENTIALS,
@@ -117,8 +118,7 @@ async function register(data, msg, name) {
   }
 }
 
-async function sendMessage(transactions, categories, errors, msg, sheetId) {
-
+async function sendMessage(transactions, categories, errors, msg, sheetId, sendTo) {
   let countTrxSuccess = 0;
   let countTrxFailed = 0;
   let countConfigSuccess = 0;
@@ -162,9 +162,46 @@ async function sendMessage(transactions, categories, errors, msg, sheetId) {
       message += `${error}`;
     }
     message += `\nPlease make sure to use the correct format`
+  } else {
+    message = message.trimEnd();
   }
 
-  msg.reply(message);
+  sendMessageWithTimeout(sendTo, message);
+}
+
+function sendMessageWithTimeout(sendTo, message) {
+  let timeoutId;
+  let lastMessage;
+  let isSending = false;
+  lastMessage = message;
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+
+  if (isSending) {
+    return;
+  }
+
+  isSending = true;
+
+  client.sendMessage(sendTo, lastMessage)
+    .then(() => {
+      timeoutId = setTimeout(() => {
+        isSending = false;
+        client.sendMessage(sendTo, `It looks like you don't have any more transaction to process right now. Feel free to send a message whenever you need!`)
+          .then(() => {
+            console.log("Message sent again after 30 seconds!");
+          })
+          .catch((error) => {
+            console.error("Failed to send the message again:", error);
+          });
+      }, 30000);
+    })
+    .catch((error) => {
+      console.error("Failed to send the initial message:", error);
+      isSending = false;
+    });
 }
 
 async function checkMessage(messages, user = '') {
@@ -173,6 +210,7 @@ async function checkMessage(messages, user = '') {
   const regexOutcome = /^([a-zA-Z\s]+)\s+(.+?)\s+(.+?)\s+(.+?)\s+(\d+)$/;
   const regexAction = /^([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+([a-zA-Z\s]+)\s+(.+?)$/;
   const regexSpreadsheetId = /\/d\/([a-zA-Z0-9-_]+)/;
+  const regexHelp = /^\.$|^hi$/;
   const baseName = await getConfig("name", ADMIN_SPREADSHEET_ID);
   const baseSheet = await getConfig("sheet", ADMIN_SPREADSHEET_ID);
   const users = await getConfig("users", ADMIN_SPREADSHEET_ID);
@@ -196,11 +234,15 @@ async function checkMessage(messages, user = '') {
   let sheetId = baseSheet[index];
   const baseCategory = await getConfig("category", sheetId);
   const baseSource = await getConfig("source", sheetId);
-
+  const sendTo = `${phoneNumber}@s.whatsapp.net`;
   if (users.includes(phoneNumber)) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      if (regexOutcome.test(line)) {
+      if (regexHelp.test(line)) {
+        const content = `${getGreeting()}, ${baseName[index]}.\nTo manage your cash flow, please use the following formats:\n- *Add a new transaction:* \`\`\`[in/out] [transaction_name] [category] [source] [amount]\`\`\`\n- *Add a new configuration:* \`\`\`[config] [category/source] add [item_name]\`\`\`\n\n*Available categories:*\n${baseCategory.map(category => `- ${category}`).join('\n')}\n\n*Sources of funds:*\n${baseSource.map(source => `- ${source}`).join('\n')}`;
+        client.sendMessage(sendTo, content)
+        return;
+      } else if (regexOutcome.test(line)) {
         const baseAction = ["in", "out"];
         const match = line.match(regexOutcome);
         const type = match[1].trim();
@@ -262,7 +304,7 @@ async function checkMessage(messages, user = '') {
       }
     }
 
-    sendMessage(transactionItem, categoryItem, errorItem, lastMessage, sheetId);
+    sendMessage(transactionItem, categoryItem, errorItem, lastMessage, sheetId, sendTo);
 
   } else if (regexRegister.test(lines[0])) {
     const match = lines[0].match(regexRegister);
