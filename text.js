@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, MessageSendOptions } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const { google } = require("googleapis");
 const TransactionItem = require("./model/transactionItem");
@@ -184,8 +184,10 @@ function sendMessageWithTimeout(sendTo, message) {
   }
 
   isSending = true;
-
-  client.sendMessage(sendTo, lastMessage)
+  const options = {
+    sendSeen: true
+  };
+  client.sendMessage(sendTo, lastMessage, options)
     .then(() => {
       timeoutId = setTimeout(() => {
         isSending = false;
