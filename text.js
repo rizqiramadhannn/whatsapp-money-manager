@@ -229,7 +229,7 @@ async function checkMessage(text, msg, bot) {
 
   if (regexHelp.test(text) || text.toLowerCase() === "help") {
     const content = `${getGreeting()}, To manage your cash flow, please use the following formats:\n- *Add a new transaction:* \`\`\`[in/out] [transaction_name] [category] [source] [amount]\`\`\`\n- *Add a new configuration:* \`\`\`[config] [category/source] add [item_name]\`\`\`\n\n*Available categories:*\n${baseCategory.map(category => `- ${category}`).join('\n')}\n\n*Sources of funds:*\n${baseSource.map(source => `- ${source}`).join('\n')}`;
-    client.sendMessage(sendTo, content)
+    bot.sendMessage(chatId, content)
     return;
   }
 
