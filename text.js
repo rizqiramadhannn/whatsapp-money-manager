@@ -8,7 +8,7 @@ const {
   getGreeting,
 } = require("./helper/helper");
 
-const CREDENTIALS = JSON.parse(fs.readFileSync("credentials.json"));
+const CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 const ADMIN_SPREADSHEET_ID = process.env.ADMIN_SHEET_ID;
 
 const sheets = google.sheets("v4");
