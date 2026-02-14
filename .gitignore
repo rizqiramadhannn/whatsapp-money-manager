@@ -4,5 +4,6 @@ node_modules/
 session/
 credentials.json
 secret.js
+.env
 whatsapp_notes.bat
 whatsapp_notes.bat - Shortcut.lnk
