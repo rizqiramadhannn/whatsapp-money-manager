@@ -180,8 +180,9 @@ async function checkMessage(text, msg, bot) {
 
   const userIndex = baseUsers.indexOf(userId);
 
-  if (regexHelp.test(text)) {
-    await bot.sendMessage(chatId, "Send transaction like:\nin food cash 50000");
+  if (regexHelp.test(text) || text.toLowerCase() === "help") {
+    const content = `${getGreeting()}, ${baseName[index]}.\nTo manage your cash flow, please use the following formats:\n- *Add a new transaction:* \`\`\`[in/out] [transaction_name] [category] [source] [amount]\`\`\`\n- *Add a new configuration:* \`\`\`[config] [category/source] add [item_name]\`\`\`\n\n*Available categories:*\n${baseCategory.map(category => `- ${category}`).join('\n')}\n\n*Sources of funds:*\n${baseSource.map(source => `- ${source}`).join('\n')}`;
+    client.sendMessage(sendTo, content)
     return;
   }
 
