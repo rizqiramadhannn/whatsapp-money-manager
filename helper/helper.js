@@ -1,12 +1,15 @@
 function formatDateTime(unixTimestamp) {
-    const date = new Date(unixTimestamp * 1000);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
+    const utcDate = new Date(unixTimestamp * 1000);
 
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const utc7 = new Date(utcDate.getTime() + (7 * 60 * 60 * 1000));
+
+    const day = String(utc7.getUTCDate()).padStart(2, '0');
+    const month = String(utc7.getUTCMonth() + 1).padStart(2, '0');
+    const year = utc7.getUTCFullYear();
+
+    const hours = String(utc7.getUTCHours()).padStart(2, '0');
+    const minutes = String(utc7.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(utc7.getUTCSeconds()).padStart(2, '0');
 
     return `${month}-${day}-${year} ${hours}:${minutes}:${seconds}`;
 }
