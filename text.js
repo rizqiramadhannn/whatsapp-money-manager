@@ -8,6 +8,8 @@ const {
   getGreeting,
 } = require("./helper/helper");
 
+require("dotenv").config();
+
 const CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 const ADMIN_SPREADSHEET_ID = process.env.ADMIN_SHEET_ID;
 
