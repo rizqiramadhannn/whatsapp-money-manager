@@ -22,7 +22,7 @@ const auth = new google.auth.GoogleAuth({
 
 async function addTransaction(data, sheetId) {
   const inputRange =
-    data.type === "out" ? "Cashflow!B:F" : "Cashflow!H:L";
+    data.type.toLowerCase() === "out" ? "Cashflow!B:F" : "Cashflow!H:L";
 
   const client = await auth.getClient();
 
@@ -228,7 +228,7 @@ async function checkMessage(text, msg, bot) {
   }
 
   if (regexHelp.test(text) || text.toLowerCase() === "help") {
-    const content = `${getGreeting()}, To manage your cash flow, please use the following formats:\n- *Add a new transaction:* \`\`\`[in/out] [transaction_name] [category] [source] [amount]\`\`\`\n- *Add a new configuration:* \`\`\`[config] [category/source] add [item_name]\`\`\`\n\n*Available categories:*\n${baseCategory.map(category => `- ${category}`).join('\n')}\n\n*Sources of funds:*\n${baseSource.map(source => `- ${source}`).join('\n')}`;
+    const content = `${getGreeting()}, To manage your cash flow, please use the following formats:\n- Add a new transaction: [in/out] [transaction_name] [category] [source] [amount]\n- Add a new configuration: [config] [category/source] add [item_name]\n\n*Available categories:\n${baseCategory.map(category => `- ${category}`).join('\n')}\n\nSources of funds:\n${baseSource.map(source => `- ${source}`).join('\n')}`;
     bot.sendMessage(chatId, content)
     return;
   }
@@ -348,7 +348,7 @@ async function getAllTransactions(sheetId) {
 
     const date = new Date(row[0]);
     const amount = Number(row[4] || row[9]);
-    const type = row[4] ? "out" : "in";
+    const type = row[4].toLowerCase() ? "out" : "in";
 
     transactions.push({ date, amount, type });
   });
