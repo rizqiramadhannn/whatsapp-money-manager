@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">Chat Money Manager</title>
+  <desc id="desc">Messages in. Cashflow organized. Node.js / Telegram / Google Sheets</desc>
+  <defs>
+    <linearGradient id="bg"><stop stop-color="#101820"/><stop offset="1" stop-color="#17303a"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#7bcfe6" stroke-opacity=".06"/></pattern>
+  </defs>
+  <rect width="1200" height="300" rx="18" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="18" fill="url(#grid)"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <circle cx="55" cy="48" r="4" fill="#7bcfe6"/>
+    <text x="72" y="53" fill="#7bcfe6" font-size="13" font-weight="600" letter-spacing="2.2">AUTOMATION / PERSONAL FINANCE</text>
+    <text x="50" y="130" fill="#f1f7fa" font-size="54" font-weight="700" letter-spacing="-1.5">Chat Money Manager</text>
+    <text x="52" y="174" fill="#bbccd5" font-size="24">Messages in. Cashflow organized.</text>
+    <path d="M52 207H738" stroke="#7bcfe6" stroke-opacity=".22"/>
+    <text x="52" y="246" fill="#7bcfe6" font-size="14" letter-spacing="1">Node.js / Telegram / Google Sheets</text>
+  </g>
+  <g transform="translate(1008 150)">
+    <circle r="112" fill="#7bcfe6" fill-opacity=".035" stroke="#7bcfe6" stroke-opacity=".12"/>
+    <g fill="none" stroke="#7bcfe6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M-105-60H-15V10H-55L-80 35V10H-105Z"/><path d="M20-15H105V75H20ZM20 15H105M20 45H105M48-15V75"/><path d="M-5 40H8M0 32L8 40L0 48"/></g>
+  </g>
+</svg>
